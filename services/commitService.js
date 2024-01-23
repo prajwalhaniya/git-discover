@@ -1,13 +1,14 @@
 const { Octokit } = require('octokit');
-const colors = require('colors');
-const { config } = require('../gidi_config.js');
+const configServices = require('./configServices');
 const fs = require('fs').promises;
 
 module.exports = {
     getAllCommits: async (since, until) => {
         try {
+            const config = await configServices.getConfig();
+            console.log({ config });
             const octokit = new Octokit();
-            const commits = await octokit.request(`${config.repoUrl}?since=${since}&until=${until}`, {
+            const commits = await octokit.request(`Get /repos/${config.owner}/${config.repo}/commits?since=${since}&until=${until}`, {
                 owner: config.owner,
                 repo: config.repo,
                 ref: config.ref,
@@ -32,7 +33,7 @@ module.exports = {
 
                     commitsArr.push(obj);
                 }
-                await fs.writeFile('temp/commits.json', JSON.stringify(commitsArr), (err) => {
+                await fs.writeFile(config.fileSource, JSON.stringify(commitsArr), (err) => {
                     if (err) {
                         console.log('Error while writing to the file', err);
                     }
