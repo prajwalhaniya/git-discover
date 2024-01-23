@@ -2,6 +2,7 @@ const yargs = require('yargs');
 const shell = require('shelljs');
 const commitService = require('./commitService');
 const colors = require('colors');
+const fs = require('fs').promises;
 const TableLayout = require('table-layout');
 
 const self = module.exports = {
@@ -37,6 +38,12 @@ const self = module.exports = {
                         describe: 'Select a commit hash to go back in time',
                         type: 'string'
                     })
+                    .option('listCommits', {
+                        alias: 'lc',
+                        describe: 'Lists previously fetched commits',
+                        type: 'boolean',
+                        default: false
+                    })
                     .argv;
     
     
@@ -48,17 +55,20 @@ const self = module.exports = {
     
                 if (argv.getCommits) {
                     const dateInputs = argv.getCommits;
-                    if (dateInputs?.length) {
+                    if (dateInputs?.length === 2) {
                         const since = dateInputs[0];
                         const until = dateInputs[1];
                         await self.getCommits(since, until);
-                    } else {
-                        console.log('Please specify dates since & until');
                     }
                 }
 
                 if (argv.goto) {
                     await self.goto(argv.goto);
+                }
+
+                if (argv.listCommits) {
+                    console.log('Inisde list');
+                    await self.listCommits();
                 }
             } catch (error) {
                 console.log('Error while getting the input from user', error);
@@ -66,28 +76,54 @@ const self = module.exports = {
             }
     },
 
+    createCommitsInTable: async (commits) => {
+        if (commits?.length) {
+            const colouredCommits = [];
+
+            for (let i = 0; i < commits.length; i++) {
+                const commit = commits[i];
+                const obj = {
+                    index: i,
+                    sha: colors.green(commit.sha),
+                    message: colors.yellow(commit?.message)
+                }
+                colouredCommits.push(obj);
+            }
+
+            const table = new TableLayout(colouredCommits, {
+                maxWidth: 80,
+                columns: [
+                    {
+                        name: 'Sl.no',
+                        get: cellValue => (cellValue.index)
+                    },
+                    {
+                        name: 'Commit hash',
+                        get: cellValue => (cellValue.sha)
+                    },
+                    {
+                        name: 'Message',
+                        get: cellValue => (cellValue.message)
+                    }
+                ]
+            });
+
+            return table;
+        }
+        return [];
+    },
+
     getCommits: async (since, until) => {
         try {
             const commits = await commitService.getAllCommits(since, until);
             if (commits?.success) {
-                const table = new TableLayout(commits?.message, {
-                    maxWidth: 80,
-                    columns: [
-                        {
-                            name: 'Commit hash',
-                            get: cellValue => (cellValue.sha)
-                        },
-                        {
-                            name: 'Message',
-                            get: cellValue => (cellValue.message)
-                        }
-                    ]
-                });
-
+                const commitsString = await fs.readFile('temp/commits.json', 'utf-8')
+                const parsedCommits = JSON.parse(commitsString);
+                const table = await self.createCommitsInTable(parsedCommits);
                 console.log('===================================================');
                 console.log(table.toString());
                 console.log('===================================================');
-                return commits?.message;
+                return commits?.commits;
             }
             return []
         } catch (error) {
@@ -106,6 +142,20 @@ const self = module.exports = {
         } catch (error) {
             console.log('Error while going back to the particular commit', error);
             return { success: false, message: 'Error while going back in time' };
+        }
+    },
+
+    listCommits: async () => {
+        try {
+            const commitsString = await fs.readFile('temp/commits.json', 'utf-8')
+            const commits = JSON.parse(commitsString);
+            const table = await self.createCommitsInTable(commits);
+            console.log('===================================================');
+            console.log(table.toString());
+            console.log('==================================================='); 
+        } catch (error) {
+            console.log('Error while listing all the commits', error);
+            return { success: false, message: 'Error while listing all the commits' };
         }
     }
 }
