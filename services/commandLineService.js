@@ -4,6 +4,8 @@ const commitService = require('./commitService');
 const colors = require('colors');
 const fs = require('fs').promises;
 const TableLayout = require('table-layout');
+const configServices = require('./configServices');
+
 
 const self = module.exports = {
     greet: async () => {
@@ -21,6 +23,11 @@ const self = module.exports = {
     loadInputs: async () => {
             try {
                 const argv = yargs
+                    .option('config', {
+                        alias: 'c',
+                        description: 'add config details',
+                        type: 'array'
+                    })
                     .option('list', {
                         alias: 'l',
                         description: 'List all options',
@@ -36,7 +43,7 @@ const self = module.exports = {
                     .option('goto', {
                         alias: 'gt',
                         describe: 'Select a commit hash to go back in time',
-                        type: 'string'
+                        type: 'number'
                     })
                     .option('listCommits', {
                         alias: 'lc',
@@ -46,7 +53,10 @@ const self = module.exports = {
                     })
                     .argv;
     
-    
+                
+                if (argv.config) {
+                    await self.addToGidiConfigFile(argv.config);
+                }
                 if (argv.list) {
                     console.log('Available options:');
                     console.log('--getCommits, -gc: get all the commits, pass [since_date, until_date]');
@@ -67,13 +77,30 @@ const self = module.exports = {
                 }
 
                 if (argv.listCommits) {
-                    console.log('Inisde list');
                     await self.listCommits();
                 }
             } catch (error) {
                 console.log('Error while getting the input from user', error);
                 return { success: false, message: 'Error while getting the input from the user' };
             }
+    },
+
+    addToGidiConfigFile: async (arr) => {
+        if (!arr?.length < 3) {
+            const config = {
+                owner: arr[0],
+                repo: arr[1],
+                ref: arr[2],
+                configSource: 'node_modules/git-discover/config/gidi_config.json',
+                fileSource: 'node_modules/git-discover/temp/commits.json'
+            }
+            await fs.writeFile('config/gidi_config.json', JSON.stringify(config));
+            console.log(colors.green('Configuration added'));
+            return { success: true, message: 'Configuration added' };
+        } else {
+            console.log('Please pass all the required arguments: owner, repo & ref');
+            return { success: false, message: 'Error while adding the configuration file' };
+        }
     },
 
     createCommitsInTable: async (commits) => {
@@ -113,12 +140,18 @@ const self = module.exports = {
         return [];
     },
 
+    fetchCommitsFromTemp: async () => {
+        const config = await configServices.getConfig();
+        const commitsString = await fs.readFile(config.fileSource, 'utf-8')
+        const parsedCommits = JSON.parse(commitsString);
+        return parsedCommits;
+    },
+
     getCommits: async (since, until) => {
         try {
             const commits = await commitService.getAllCommits(since, until);
             if (commits?.success) {
-                const commitsString = await fs.readFile('temp/commits.json', 'utf-8')
-                const parsedCommits = JSON.parse(commitsString);
+                const parsedCommits = await self.fetchCommitsFromTemp();
                 const table = await self.createCommitsInTable(parsedCommits);
                 console.log('===================================================');
                 console.log(table.toString());
@@ -132,13 +165,18 @@ const self = module.exports = {
         }
     },
 
-    goto: async (commitHash) => {
+    goto: async (commitIndex) => {
         try {
             if (!shell.which('git')) {
                 shell.echo('Sorry, this script requires git');
                 shell.exit(1);
             }
-            shell.exec(`git checkout ${commitHash}`);
+            const commits = await self.fetchCommitsFromTemp();
+            const commitBasedOnIndex = commits.filter(commit => commit.index === commitIndex);
+
+            const commitData = commitBasedOnIndex[0];
+            console.log({ commitData });
+            shell.exec(`git checkout ${commitData.sha}`);
         } catch (error) {
             console.log('Error while going back to the particular commit', error);
             return { success: false, message: 'Error while going back in time' };
@@ -147,7 +185,8 @@ const self = module.exports = {
 
     listCommits: async () => {
         try {
-            const commitsString = await fs.readFile('temp/commits.json', 'utf-8')
+            const config = await configServices.getConfig();
+            const commitsString = await fs.readFile(config.fileSource, 'utf-8')
             const commits = JSON.parse(commitsString);
             const table = await self.createCommitsInTable(commits);
             console.log('===================================================');
