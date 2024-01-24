@@ -26,10 +26,9 @@ eg: `gidi --gc '2009-06-26' '2009-06-30'`
 
 `gidi --lc`
 
-<img src="assets/1.png">
+![image-1](/assets/1.png)
 
 ## Go back in time (Set project to a particular commit)
 
 `gidi --gt INDEX`
-
-<img src="assets/2.png">
+![image-2](/assets/2.png)
