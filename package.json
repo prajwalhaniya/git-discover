@@ -6,6 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prajwalhaniya/git-discover.git"
+  },
   "bin": {
     "gidi": "./bin/index.js"
   },
